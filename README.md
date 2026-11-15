@@ -32,9 +32,9 @@ With a release zip, you do not need Rust:
 
 ```bash
 unzip remote-debounce-*.zip && cd remote-debounce-*/
-./install_to_osmc.sh [--host HOST] [--debounce-ms N]   # copy the files to OSMC
+./install_to_osmc.sh [--host HOST] [--debounce-ms N] [--vid HEX] [--pid HEX]   # copy the files to OSMC
 # then on OSMC:
-cd ~/remote_debounce && sudo ./install.sh [--debounce-ms N]
+cd ~/remote_debounce && sudo ./install.sh [--debounce-ms N] [--vid HEX] [--pid HEX]
 ```
 
 From the source tree, `install_to_osmc.sh` uses `target/<arch>/release/remote-debounce`
@@ -42,10 +42,19 @@ if it exists. It builds the binary only if none exists, or with `--rebuild`.
 A build needs the Rust toolchain and the `aarch64-unknown-linux-musl` target.
 
 `install.sh` is safe to run again. It copies a file only if the content
-differs. It restarts the service only if a file or the value changed. Without
-`--debounce-ms` it keeps the installed value (120 ms on a first install). The
-value is stored in `/etc/default/remote-debounce`. To change it later, run
-`sudo ./install.sh --debounce-ms 150` again.
+differs. It restarts the service only if a file or a value changed. Without an
+option it keeps the installed value. The values are stored in
+`/etc/default/remote-debounce`. To change one later, run `install.sh` again with
+that option, for example `sudo ./install.sh --debounce-ms 150`.
+
+## Other remotes
+
+The defaults (`--vid 2017 --pid 1690`) match the OSMC remote dongle. The IDs
+name the product model, so all dongles of that model match. For another remote,
+find its IDs with `lsusb` (`ID 046d:c52b` means vendor `046d`, product `c52b`)
+or in `/proc/bus/input/devices` (`Vendor=` and `Product=`). Then run
+`sudo ./install.sh --vid 046d --pid c52b`. Use hex digits, at most 4 each.
+The service filters every input device with these IDs.
 
 To roll back, run `systemctl disable --now remote-debounce`. Kodi then sees the
 original devices again.

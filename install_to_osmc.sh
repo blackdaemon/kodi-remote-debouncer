@@ -1,14 +1,14 @@
 #!/bin/sh
 # Copy remote-debounce to OSMC and print the install command.
 #
-# usage: ./install_to_osmc.sh [--host HOST] [--rebuild] [--debounce-ms N]
+# usage: ./install_to_osmc.sh [--host HOST] [--rebuild] [install.sh options]
 #
 # The script uses a binary that already exists. It looks for ./remote-debounce
 # (the release zip) and then target/<arch>/release/remote-debounce. It builds
 # the binary only if none exists, or with --rebuild. A build needs the Rust
 # toolchain and the aarch64-unknown-linux-musl target. With a release zip you
 # do not need Rust.
-# Other arguments go to install.sh, for example --debounce-ms 150.
+# Other arguments go to install.sh: --debounce-ms N, --vid HEX, --pid HEX.
 set -eu
 cd "$(dirname "$0")"
 

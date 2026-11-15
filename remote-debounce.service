@@ -4,7 +4,7 @@ After=local-fs.target systemd-udevd.service
 
 [Service]
 EnvironmentFile=/etc/default/remote-debounce
-ExecStart=/usr/local/bin/remote-debounce --debounce-ms ${DEBOUNCE_MS}
+ExecStart=/usr/local/bin/remote-debounce --debounce-ms ${DEBOUNCE_MS} --vid ${VID} --pid ${PID}
 Restart=always
 RestartSec=2
 
