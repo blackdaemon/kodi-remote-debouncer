@@ -57,5 +57,32 @@ ssh "$host" "mkdir -p $remote_dir"
 scp ./remote-debounce.service "$binary" ./install.sh "$host:$remote_dir/"
 ssh "$host" "chmod +x $remote_dir/install.sh"
 
-printf '\nssh into %s and run:\n\tcd %s && sudo ./install.sh%s\n' \
-    "$host" "$remote_dir" "$install_args"
+has_debounce_option=
+for arg in $install_args; do
+  [ "$arg" = "--debounce-ms" ] && has_debounce_option=true && break
+done
+
+if [ "$has_debounce_option" != "true" ]; then
+  printf "\nIf you want to change the debounce time in milliseconds, re-run this script with --debounce-ms N. Default is 120."
+fi
+
+printf '\n\nNow ssh into osmc and run:\n\tcd %s && sudo ./install.sh %s\n' "$remote_dir" "$install_args"
+
+yes_or_no() {
+  while true; do
+    read -n 1 -p "$* [y/N]: " yn
+    case $yn in
+      [Yy])
+        echo
+        return 0;
+        ;;
+      *)
+        printf "\nAborted\n";
+        return  1
+        ;;
+    esac
+  done
+}
+
+echo
+yes_or_no "Should I do that now?" && ssh osmcv "cd $remote_dir && sudo ./install.sh $install_args"

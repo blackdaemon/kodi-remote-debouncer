@@ -73,8 +73,3 @@ The script runs the tests, builds the binary and makes
 file. It then asks for confirmation and publishes the tag
 `remote-debounce-v<version>` with `gh`. If the release exists, it replaces the
 files. `--dry-run` stops after the zip. Raise the version in `Cargo.toml` first.
-
-## Not verified
-
-Local tests cover only the filter logic. Nobody has run the service on the
-Vero. Check that Kodi picks up the `debounced:` devices.
