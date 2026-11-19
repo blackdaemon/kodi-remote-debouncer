@@ -5,6 +5,7 @@
 //! come again within a short time window. Kodi then reads the clean copy.
 
 mod debounce;
+mod settle;
 
 use std::collections::HashSet;
 use std::io;
@@ -17,6 +18,7 @@ use evdev::uinput::VirtualDevice;
 use evdev::{Device, InputEvent};
 
 use debounce::{Debouncer, Ev, EV_SYN};
+use settle::{Caps, Settle};
 
 const CLONE_PREFIX: &str = "debounced: ";
 const RESCAN: Duration = Duration::from_secs(2);
@@ -74,6 +76,46 @@ fn event_paths() -> Vec<PathBuf> {
         .collect()
 }
 
+fn caps_of(dev: &Device) -> Caps {
+    let mut keys: Vec<u16> = dev
+        .supported_keys()
+        .map(|k| k.iter().map(|c| c.code()).collect())
+        .unwrap_or_default();
+    let mut rel: Vec<u16> = dev
+        .supported_relative_axes()
+        .map(|a| a.iter().map(|c| c.0).collect())
+        .unwrap_or_default();
+    keys.sort_unstable();
+    rel.sort_unstable();
+    Caps { keys, rel }
+}
+
+/// Read the clone's capabilities back from its device node and compare them
+/// with the original. A mismatch means the clone was built from a device that
+/// was still changing, and Kodi would silently lose some keys.
+fn verify_clone(clone: &mut VirtualDevice, want: &Caps) -> io::Result<()> {
+    for node in clone.enumerate_dev_nodes_blocking()?.flatten() {
+        let is_event = node
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("event"));
+        if !is_event {
+            continue;
+        }
+        match Device::open(&node) {
+            Ok(d) if caps_of(&d) != *want => {
+                return Err(io::Error::other(format!(
+                    "clone {} has different capabilities than the original",
+                    node.display()
+                )));
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("warning: cannot verify {}: {e}", node.display()),
+        }
+    }
+    Ok(())
+}
+
 fn build_clone(dev: &Device) -> io::Result<VirtualDevice> {
     let name = format!("{CLONE_PREFIX}{}", dev.name().unwrap_or("remote"));
     let mut builder = VirtualDevice::builder()?
@@ -96,6 +138,7 @@ fn build_clone(dev: &Device) -> io::Result<VirtualDevice> {
 
 fn proxy(path: &Path, mut dev: Device, cfg: &Config) -> io::Result<()> {
     let mut clone = build_clone(&dev)?;
+    verify_clone(&mut clone, &caps_of(&dev))?;
     dev.grab()?;
     eprintln!(
         "filtering {} ({}), window {} ms",
@@ -133,9 +176,11 @@ fn main() {
     let cfg = Arc::new(parse_args());
     let active: Arc<Mutex<HashSet<PathBuf>>> = Arc::default();
     let mut ignored: HashSet<PathBuf> = HashSet::new();
+    let mut settle = Settle::default();
     loop {
         let paths = event_paths();
         ignored.retain(|p| paths.contains(p));
+        settle.retain(&paths);
         for path in paths {
             if ignored.contains(&path) || active.lock().unwrap().contains(&path) {
                 continue;
@@ -147,6 +192,11 @@ fn main() {
             let ours = dev.name().is_some_and(|n| n.starts_with(CLONE_PREFIX));
             if ours || id.vendor() != cfg.vendor || id.product() != cfg.product {
                 ignored.insert(path);
+                continue;
+            }
+            // A dongle that has just been plugged in is still being set up by
+            // the kernel. Wait until its capabilities stop changing.
+            if !settle.is_settled(&path, &caps_of(&dev)) {
                 continue;
             }
             active.lock().unwrap().insert(path.clone());
